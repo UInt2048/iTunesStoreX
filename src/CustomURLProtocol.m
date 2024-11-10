@@ -10,8 +10,28 @@ static NSString * const URLProtocolHandledKey = @"URLProtocolHandledKey";
 
 @implementation CustomURLProtocol
 
+static NSString* outputDictionary(NSDictionary* inputDict) {
+    NSMutableString * outputString = [NSMutableString stringWithCapacity:256];
+    NSArray * allKeys = [inputDict allKeys];
+
+    for (NSString * key in allKeys) {
+        if ([[inputDict objectForKey:key] isKindOfClass:[NSDictionary class]]) {
+            [outputString appendString: outputDictionary((NSDictionary *)inputDict)];
+        }
+        else {
+            [outputString appendString: key];
+            [outputString appendString: @": "];
+            [outputString appendString: [[inputDict objectForKey: key] description]];
+        }
+        [outputString appendString: @"\n"];
+    }
+    return [NSString stringWithString: outputString];
+}
+
 + (BOOL)canInitWithRequest:(NSURLRequest *)request {
     NSString *requestURLString = request.URL.absoluteString;
+    NSLog(@"[CustomURLProtocol canInitWithRequest:] for %@ with headers:\n%@",
+    requestURLString, outputDictionary([request allHTTPHeaderFields]));
     
     // Check if the request URL contains the exception string
     if ([requestURLString rangeOfString:@"https://search.itunes.apple.com"].location != NSNotFound) {
@@ -38,6 +58,8 @@ static NSString * const URLProtocolHandledKey = @"URLProtocolHandledKey";
     NSMutableURLRequest *mutableRequest = [self.request mutableCopy];
     NSString *requestURLString = mutableRequest.URL.absoluteString;
     
+    NSLog(@"[CustomURLProtocol startLoading:] for %@", requestURLString);
+    
     // Check if the request URL is the exception URL
     if ([requestURLString isEqualToString:@"https://search.itunes.apple.com/htmlResources/d04b/dv6-storefront-p6bootstrap.js"]) {
         // Allow this specific URL to go through without modification
@@ -56,6 +78,9 @@ static NSString * const URLProtocolHandledKey = @"URLProtocolHandledKey";
     // Prevent infinite loops by marking this request as handled
     [NSURLProtocol setProperty:@YES forKey:URLProtocolHandledKey inRequest:mutableRequest];
 
+    NSLog(@"[CustomURLProtocol startLoading:] replaced %@ from %@",
+    requestURLString, self.request.URL.absoluteString);
+
     // Create a connection with the modified request
     self.connection = [NSURLConnection connectionWithRequest:mutableRequest delegate:self];
 }
@@ -71,18 +96,22 @@ static NSString * const URLProtocolHandledKey = @"URLProtocolHandledKey";
 #pragma mark - NSURLConnectionDelegate
 
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response {
+    NSLog(@"[CustomURLProtocol connection:didReceiveResponse:] for %@", [[[connection originalRequest] URL] absoluteString]);
     [self.client URLProtocol:self didReceiveResponse:response cacheStoragePolicy:NSURLCacheStorageNotAllowed];
 }
 
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data {
+    NSLog(@"[CustomURLProtocol connection:didReceiveData:] for %@", [[[connection originalRequest] URL] absoluteString]);
     [self.client URLProtocol:self didLoadData:data];
 }
 
 - (void)connectionDidFinishLoading:(NSURLConnection *)connection {
+    NSLog(@"[CustomURLProtocol connectionDidFinishLoading:] for %@", [[[connection originalRequest] URL] absoluteString]);
     [self.client URLProtocolDidFinishLoading:self];
 }
 
 - (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error {
+    NSLog(@"[CustomURLProtocol connection:didFailWithError:] for %@ and error %@", [[[connection originalRequest] URL] absoluteString], [error localizedDescription]);
     [self.client URLProtocol:self didFailWithError:error];
 }
 
